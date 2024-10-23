@@ -8,7 +8,7 @@ def auth(function_get_response):
         auth_header = request.META['HTTP_AUTHORIZATION']
         if not auth_header or not auth_header.startswith('Basic'):
             return JsonResponse({'error':'Authorization header missing or invalid'}, status=401)
-        print(auth_header)
+        # print(auth_header)
         encoded_credentials = auth_header.split(' ')[1]  # Removes "Basic " to isolate credentials
         # print(encoded_credentials)
         decoded_credentials = base64.b64decode(encoded_credentials).decode("utf-8").split(':')
@@ -29,3 +29,36 @@ def auth(function_get_response):
         
     #    return response
     return middleware 
+
+    
+class SimpleMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # One-time configuration and initialization.
+
+    def __call__(self, request):
+        # Code to be executed for each request before
+        # the view (and later middleware) are called.
+        # get the auth header from the metadata of the request
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        if not auth_header or not auth_header.startswith('Basic '):
+            return JsonResponse({'error': 'authentication header is not provided'}, status=401)
+        
+        # decode the values value from the header, before that grab the encoded value of the credentials
+
+        encoded_credentials = auth_header.split(' ')[1]
+        # decode 
+        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8').split(':')
+        username = decoded_credentials[0]
+        password = decoded_credentials[1]
+        
+        # authenticate the user
+        user = authenticate(username, password) # if user not found none will returned
+        if not user:
+            return JsonResponse({'error': 'Invalid credentials'}, status=401)
+    
+        response = self.get_response(request)
+
+        # Code to be executed for each request/response after
+        # the view is called
+        return response

@@ -3,18 +3,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
 import json
 import re
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.paginator import Paginator, PageNotAnInteger
 from .models import Route, Trip
 import requests
 from requests.exceptions import RequestException
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
-from .middleware import auth
-
-
-@auth
-def dummy(request):
-    return JsonResponse({'message': 'authorized'},status=200)
+from .constants import *
 
 def registration(request):
     # here I will get the data related to the user
@@ -45,7 +40,7 @@ def validate_route_id(value):
             raise ValidationError('Route Id must start with (RT) followed by 8 digits.')
         return value    
 
-@auth
+
 @csrf_exempt
 def create_route(request):
     if request.method == 'POST':
@@ -55,7 +50,8 @@ def create_route(request):
             # validate route_id format
             validate_route_id(data.get('route_id'))
             # check if every value is present or not
-            if not data.get('route_name') or not data.get('user_id') or not data.get('route_origin') or not data.get('route_destination') or not data.get('route_stops'):
+            if not data.get('route_name') or not data.get(USER_ID) or not data.get('route_origin') or not data.get('route_destination') or not data.get('route_stops'):
+
                 return JsonResponse({'error': 'all values are required'}, status=400)
             # create Route instance
             route = Route.objects.create(
@@ -76,7 +72,7 @@ def create_route(request):
         return JsonResponse({'error': 'Only POST requests are allowed.'}, status=405)
     
     
-@auth
+
 @csrf_exempt
 def create_trip(request):
     if request.method == 'POST':
@@ -121,7 +117,7 @@ def create_trip(request):
     
 
 # trip Listing with Pagination and Foreign Key Route Data
-@auth
+
 def trip_list(request):
     try:
         if request.method == 'GET':
@@ -172,7 +168,7 @@ def trip_list(request):
         return JsonResponse({'error': str(e)}, status=500)
     
 
-@auth
+
 # trip detail View with foreign Key Route Data
 def trip_detail(request):
     try:
@@ -181,7 +177,7 @@ def trip_detail(request):
             data = json.loads(request.body)
             trip_id = data.get('trip_id')
             if not trip_id:
-                return JsonResponse({'error': 'Trip id is required'})
+                return JsonResponse({'error': 'Trip id is required'}, status=400)
             # Fetch trip with its related route data using select_related
             trip = Trip.objects.select_related('route').get(trip_id=trip_id)
             
@@ -210,7 +206,7 @@ def trip_detail(request):
         return JsonResponse({'error': str(e)}, status=500)
     
 
-@auth
+
 # interservice call 
 def trip_bookings(request):
     try:
@@ -243,55 +239,59 @@ def trip_bookings(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 # iterservice call which sends the booking details as well with the trip details
-@auth
+
 @csrf_exempt
 def trip_detail_with_bookings(request):
     try:
-        # Fetch trip with its related route data using select_related
-        data = json.loads(request.body)
-        trip_id = data.get('trip_id')
-        if not trip_id:
-            return JsonResponse({'error': 'Trip id is not given'})
-        trip = Trip.objects.select_related('route').get(trip_id=trip_id)
-        
-        # Prepare detailed trip data with related route info
-        trip_data = {
-            'trip_id': trip.trip_id,
-            'user_id': trip.user_id,
-            'vehicle_id': trip.vehicle_id,
-            'driver_name': trip.driver_name,
-            'route': {
-                'route_id': trip.route.route_id,
-                'route_name': trip.route.route_name,
-                'route_origin': trip.route.route_origin,
-                'route_destination': trip.route.route_destination,
-                'route_stops': trip.route.route_stops,
-            }
-        }
-
-        # Fetch bookings from the external API
-        try:
-            url = f'http://localhost:5000/api/get-bookings/{trip_id}/'
-            username = "hackur777"
-            password = "12345678"
-            response = requests.get(url, auth=(username, password))
+        if request.method == 'POST':
+            # Fetch trip with its related route data using select_related
+            # sort_by = request.POST.get('sort_by')
+            data = json.loads(request.body)
+            trip_id = data.get('trip_id')
+            if not trip_id:
+                return JsonResponse({'error': 'Trip id is not given'})
+            trip = Trip.objects.select_related('route').get(trip_id=trip_id)
             
-            if response.status_code == 200:
-                bookings_data = response.json()
-            else:
-                bookings_data = {'error': 'No bookings found'}
+            # Prepare detailed trip data with related route info
+            trip_data = {
+                'trip_id': trip.trip_id,
+                'user_id': trip.user_id,
+                'vehicle_id': trip.vehicle_id,
+                'driver_name': trip.driver_name,
+                'route': {
+                    'route_id': trip.route.route_id,
+                    'route_name': trip.route.route_name,
+                    'route_origin': trip.route.route_origin,
+                    'route_destination': trip.route.route_destination,
+                    'route_stops': trip.route.route_stops,
+                }
+            }
 
-        except RequestException as e:
-            bookings_data = {'error': f'Failed to fetch bookings: {str(e)}'}
+            # Fetch bookings from the external API
+            try:
+                url = f'http://localhost:5000/api/get-bookings/{trip_id}/'
+                username = "hackur777"
+                password = "12345678"
+                response = requests.get(url, auth=(username, password))
+                # response = requests.get(url)
 
-        # Combine trip details and bookings into one response
-        response_data = {
-            'trip': trip_data,
-            'bookings': bookings_data
-        }
+                if response.status_code == 200:
+                    bookings_data = response.json()
+                else:
+                    bookings_data = {'error': 'No bookings found'}
 
-        return JsonResponse(response_data, status=200)
+            except RequestException as e:
+                bookings_data = {'error': f'Failed to fetch bookings: {str(e)}'}
 
+            # Combine trip details and bookings into one response
+            response_data = {
+                'trip': trip_data,
+                'bookings': bookings_data
+            }
+
+            return JsonResponse(response_data, status=200)
+        else:
+            return JsonResponse({'error': 'only POST request is allowed'}, status=400)
     except Trip.DoesNotExist:
         return JsonResponse({'error': 'Trip not found'}, status=404)
 
@@ -299,7 +299,7 @@ def trip_detail_with_bookings(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 # searching with the particular field
-@auth
+
 @csrf_exempt
 def search_with_field(request):
     try:
@@ -349,7 +349,7 @@ def search_with_field(request):
 def is_night_time(date):
     return date.hour >= 21 or date.hour < 6
 
-@auth
+
 @csrf_exempt
 def time_cycles(request):
     try:
@@ -361,7 +361,7 @@ def time_cycles(request):
 
             # Validate that start_date is before end_date
             if start_date >= end_date:
-                return JsonResponse({'error': 'Please enter a valid start and end date'})
+                return JsonResponse({'error': 'Please enter a valid start and end date'}, status=400)
             
             # Initialize lists for day and night times
             night_time = []
@@ -436,3 +436,21 @@ def time_cycles(request):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+def trip_exists(request, trip_id):
+    if request.method == 'GET':
+        try:
+            # Check if the trip ID exists
+            Trip.objects.get(trip_id=trip_id)
+            # If the trip is found, return success message
+            return JsonResponse({'message': 'Trip exists'}, status=200)
+        except Trip.DoesNotExist:
+            # If the trip is not found, return an error message
+            return JsonResponse({'error': 'Trip does not exist'}, status=404)
+        except Exception as e:
+            # Handle any other exceptions that might occur
+            return JsonResponse({'error': str(e)}, status=400)
+    else:
+        # Handle unsupported request methods
+        return JsonResponse({'error': 'Invalid request method'}, status=405)

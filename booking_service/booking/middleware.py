@@ -1,6 +1,6 @@
-import requests
 import base64
 from django.http import HttpResponse
+from django.contrib.auth import authenticate
 
 def auth(function):
     def middleware(request, *args, **kwargs):
@@ -21,17 +21,9 @@ def auth(function):
         except Exception as e:
             return HttpResponse('Invalid authorization format', status=401)
 
-        # URL for the interservice call
-        url = 'http://127.0.0.1:8000/api/dummy/'
-
-        # Make the interservice request
-        try:
-            res = requests.get(url, auth=(username, password))
-        except Exception as e:
-            return HttpResponse('Interservice request failed', status=500)
-
-        if res.status_code != 200:
-            return HttpResponse('Invalid username or password', status=401)
+        user = authenticate(username=username, password=password)
+        if not user: 
+            return HttpResponse('something wrong with user and password', status=401)
 
         # Call the wrapped function
         return function(request, *args, **kwargs)

@@ -95,7 +95,7 @@ REST_FRAMEWORK = {
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "booking_service",
+        "NAME": "Task",
         "USER": "postgres",
         "PASSWORD": "4934",
         "HOST": "localhost",

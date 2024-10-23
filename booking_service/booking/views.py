@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+# from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -7,7 +7,8 @@ from rest_framework.pagination import PageNumberPagination
 from .models import Booking
 from .serializers import BookingSerializer, UserSerializer
 import re
-from .middleware import auth
+import requests
+
 
 @api_view(['POST'])
 def register(request):
@@ -33,30 +34,36 @@ def validate_trip_id(value):
 
 
 @api_view(['POST'])
-@auth
 # @permission_classes([IsAuthenticated])
 def create_booking(request):
-    data = request.data
     try:
+        data = request.data
+        trip_id = data.get('trip_id')
+        ticket_id = data.get('ticket_id')
         # Validate ticket_id format
-        validate_ticket_id(data.get('ticket_id'))
-        validate_trip_id(data.get('trip_id'))
+        validate_ticket_id(trip_id)
+        validate_trip_id(ticket_id)
 
+        # now check if this trip id exist in the trip table or not
+        url = f'http://127.0.0.1:8000/api/trip-exists/{trip_id}/'
+        response = requests.get(url, auth=('hackur777', '12345678'))
         # Serializer validation
-        serializer = BookingSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({'message': 'Booking created successfully!'}, status=status.HTTP_201_CREATED)
+        if response.status_code == 200:
+            serializer = BookingSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({'message': 'Booking created successfully!'}, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({'error': 'please enter valid trip id'}, status=status.HTTP_404_NOT_FOUND)
     except ValidationError as ve:
         return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
 
-@auth
+
+
 @api_view(['GET'])
 # @permission_classes([IsAuthenticated])
 def get_booking_list(request):
@@ -71,7 +78,7 @@ def get_booking_list(request):
         # Pagination
         custom_page_size = request.query_params.get('page_size')
         paginator = PageNumberPagination()
-        paginator.page_size = custom_page_size if custom_page_size else 10 # assign the custom size
+        paginator.page_size = custom_page_size if custom_page_size else 10 # assign the custom size if present
         paginated_bookings = paginator.paginate_queryset(bookings, request)
         serializer = BookingSerializer(paginated_bookings, many=True)
 
@@ -80,7 +87,7 @@ def get_booking_list(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@auth
+
 @api_view(['GET'])
 # @permission_classes([IsAuthenticated])
 def get_booking_detail(request, booking_id):
@@ -95,7 +102,7 @@ def get_booking_detail(request, booking_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 
-@auth
+
 @api_view(['GET'])
 # @permission_classes([IsAuthenticated])
 def get_bookings(request, trip_id):
@@ -114,12 +121,12 @@ def get_bookings(request, trip_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@auth           
+          
 @api_view(['POST'])
 # @permission_classes([IsAuthenticated])
 def search_with_fields(request):
-    data = request.data
     try:
+        data = request.data
         field = data.get('field')
         query = data.get('query')
 
@@ -130,7 +137,7 @@ def search_with_fields(request):
         # filter by the provided field and query
         if field in ['ticket_id', 'trip_id', 'traveler_name', 'traveler_number', 'traveler_email']:
             filter_kwargs = {field: query}
-            bookings = Booking.objects.filter(**filter_kwargs)
+            bookings = Booking.objects.filter(filter_kwargs)
             if bookings.exists():
                 serializer = BookingSerializer(bookings, many=True)
                 return Response(serializer.data)

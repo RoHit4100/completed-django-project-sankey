@@ -80,7 +80,7 @@ WSGI_APPLICATION = 'trip_service.wsgi.application'
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "trip_service",
+        "NAME": "Task",
         "USER": "postgres",
         "PASSWORD": "4934",
         "HOST": "localhost",
