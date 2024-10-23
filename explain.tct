@@ -1,0 +1,219 @@
+This code defines a Django view function called time_cycles that processes time intervals and divides them into "day" and "night" periods. It assumes that:
+
+    Night is from 9:00 PM (21:00) to 6:00 AM.
+    Day is from 6:00 AM to 9:00 PM (21:00).
+
+Detailed Explanation
+
+    Decorator Usage:
+
+    python
+
+@auth
+@csrf_exempt
+
+    @auth: This decorator ensures that only authenticated users can access the endpoint.
+    @csrf_exempt: This decorator bypasses CSRF (Cross-Site Request Forgery) protection, making it possible to handle POST requests without the need for a CSRF token.
+
+Function Definition:
+
+python
+
+def time_cycles(request):
+
+    request: The HTTP request object. The function expects a POST request containing a JSON body with start_date and end_date.
+
+Parsing and Validation:
+
+python
+
+data = json.loads(request.body)
+start_date = datetime.fromisoformat(data.get('start_date'))
+end_date = datetime.fromisoformat(data.get('end_date'))
+
+    The function extracts start_date and end_date from the JSON body and converts them to datetime objects.
+
+python
+
+if start_date >= end_date:
+    return JsonResponse({'error': 'Please enter a valid start and end date'})
+
+    A validation step checks if the start_date is earlier than the end_date. If not, an error response is returned.
+
+Initialization:
+
+python
+
+night_time = []
+day_time = []
+current_date = start_date
+
+    night_time and day_time are lists to store the respective time periods.
+    current_date is initialized to start_date for further processing.
+
+First Lap (Partial Period Calculation):
+
+    The first if-else block determines whether the initial current_date falls within the night or day period.
+
+If Night:
+
+python
+
+if is_night_time(current_date):  # If it's night
+    night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0)
+    if night_end <= current_date:
+        night_end += timedelta(days=1)
+    if night_end > end_date:
+        night_end = end_date
+    night_time.append({
+        "start_date": current_date.isoformat(),
+        "end_date": night_end.isoformat()
+    })
+    current_date = night_end
+
+    night_end: The end of the night period is set to 6:00 AM of the current date.
+    If night_end is earlier than current_date (i.e., past midnight), it is moved to the next day.
+    If night_end exceeds end_date, it is adjusted to end_date.
+    A partial night period is added to night_time.
+    current_date is updated to night_end.
+
+If Day:
+
+python
+
+else:  # If it's day
+    day_end = current_date.replace(hour=21, minute=0, second=0, microsecond=0)
+    if day_end <= current_date:
+        day_end += timedelta(days=1)
+    if day_end > end_date:
+        day_end = end_date
+    day_time.append({
+        "start_date": current_date.isoformat(),
+        "end_date": day_end.isoformat()
+    })
+    current_date = day_end
+
+    day_end: The end of the day period is set to 9:00 PM (21:00) of the current date.
+    Adjustments are made if day_end is earlier than current_date.
+    A partial day period is added to day_time.
+    current_date is updated to day_end.
+
+Main Loop (Full Cycles Calculation):
+
+python
+
+while current_date < end_date:
+
+    This loop processes the remaining full cycles of day and night periods until current_date reaches end_date.
+
+Day Period:
+
+python
+
+if 6 <= current_date.hour < 21:
+    day_end = current_date.replace(hour=21, minute=0, second=0, microsecond=0)
+    if day_end > end_date:
+        day_end = end_date
+    day_time.append({
+        "start_date": current_date.isoformat(),
+        "end_date": day_end.isoformat()
+    })
+    current_date = day_end
+
+    If current_date falls within a day period, the end of the day is set to 9:00 PM.
+    If day_end exceeds end_date, it is adjusted.
+    The period is added to day_time and current_date is updated.
+
+Night Period:
+
+python
+
+else:
+    night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    if night_end > end_date:
+        night_end = end_date
+    night_time.append({
+        "start_date": current_date.isoformat(),
+        "end_date": night_end.isoformat()
+    })
+    current_date = night_end
+
+    If current_date is in the night period, night_end is set to the next 6:00 AM.
+    Adjustments are made if night_end exceeds end_date.
+    The period is added to night_time and current_date is updated.
+
+Final Lap (Remaining Time):
+
+python
+
+if current_date < end_date:
+    if is_night_time(current_date):
+        night_time.append({
+            "start_date": current_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+    else:
+        day_time.append({
+            "start_date": current_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+
+    If there is any remaining time after the main loop, it is classified as either day or night.
+
+Response:
+
+python
+
+    return JsonResponse({
+        "night_time": night_time,
+        "day_time": day_time
+    })
+
+        A JSON response is returned with the night_time and day_time periods.
+
+Example
+
+Input:
+
+json
+
+{
+  "start_date": "2024-10-23T02:00:00",
+  "end_date": "2024-10-24T11:00:00"
+}
+
+Output:
+
+json
+
+{
+  "night_time": [
+    {
+      "start_date": "2024-10-23T02:00:00",
+      "end_date": "2024-10-23T06:00:00"
+    },
+    {
+      "start_date": "2024-10-23T21:00:00",
+      "end_date": "2024-10-24T06:00:00"
+    }
+  ],
+  "day_time": [
+    {
+      "start_date": "2024-10-23T06:00:00",
+      "end_date": "2024-10-23T21:00:00"
+    },
+    {
+      "start_date": "2024-10-24T06:00:00",
+      "end_date": "2024-10-24T11:00:00"
+    }
+  ]
+}
+
+In this example:
+
+    The night starts on 2024-10-23 from 2:00 AM to 6:00 AM.
+    The day goes from 6:00 AM to 9:00 PM.
+    Another night goes from 9:00 PM to the next day's 6:00 AM.
+    The day starts again from 6:00 AM to 11:00 AM on 2024-10-24.
+
+
