@@ -12,4 +12,5 @@ urlpatterns = [
     path('trips-search/', views.search_with_field, name='search_with_field'),
     path('time-cycles/', views.time_cycles, name='time_cycles'),   
     path('trip-exists/<str:trip_id>/', views.trip_exists, name='trip_exists'),
+    path('create-user/', views.create_user, name='create-user')
 ]

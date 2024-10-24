@@ -17,7 +17,7 @@ def register(request):
         serializer = UserSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            return Response({'message': 'User is successfully created'}, status=status.HTTP_201_CREATED)
+            return Response({'message': 'User is successfully created'}, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -33,16 +33,16 @@ def validate_trip_id(value):
         raise ValidationError(f'Invalid ID format for Trip ID.')
 
 
+
+
 @api_view(['POST'])
 # @permission_classes([IsAuthenticated])
 def create_booking(request):
     try:
         data = request.data
         trip_id = data.get('trip_id')
-        ticket_id = data.get('ticket_id')
         # Validate ticket_id format
         validate_ticket_id(trip_id)
-        validate_trip_id(ticket_id)
 
         # now check if this trip id exist in the trip table or not
         url = f'http://127.0.0.1:8000/api/trip-exists/{trip_id}/'

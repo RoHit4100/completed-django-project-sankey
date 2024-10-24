@@ -10,6 +10,7 @@ from requests.exceptions import RequestException
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from .constants import *
+from .common_functions import *
 
 def registration(request):
     # here I will get the data related to the user
@@ -46,16 +47,11 @@ def create_route(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-
-            # validate route_id format
-            validate_route_id(data.get('route_id'))
             # check if every value is present or not
-            if not data.get('route_name') or not data.get(USER_ID) or not data.get('route_origin') or not data.get('route_destination') or not data.get('route_stops'):
-
+            if not data.get('route_name') or not data.get('user_id') or not data.get('route_origin') or not data.get('route_destination') or not data.get('route_stops'):
                 return JsonResponse({'error': 'all values are required'}, status=400)
             # create Route instance
             route = Route.objects.create(
-                route_id=data['route_id'],
                 user_id=data['user_id'],
                 route_name=data['route_name'],
                 route_origin=data['route_origin'],
@@ -80,14 +76,12 @@ def create_trip(request):
             data = json.loads(request.body)
 
             # Validate trip_id format
-            validate_trip_id(data.get('trip_id'))
             route_id = data.get('route_id')
-            trip_id = data.get('trip_id')
             user_id = data.get('user_id')
             vehicle_id = data.get('vehicle_id')
             driver_name = data.get('driver_name')
 
-            if not route_id or not trip_id or not user_id or not vehicle_id or not driver_name:
+            if not route_id or not user_id or not vehicle_id or not driver_name:
                 return JsonResponse({'error': 'All values are required'}, status=400)
             
             # Check if route is present or not
@@ -98,7 +92,6 @@ def create_trip(request):
 
             # Create Trip instance
             trip = Trip.objects.create(
-                trip_id=trip_id,
                 user_id=user_id,
                 vehicle_id=vehicle_id,
                 route=route,
@@ -216,27 +209,44 @@ def trip_bookings(request):
             if not trip_id:
                 return JsonResponse({'error': 'Trip id is not given'})
             url = f'http://localhost:5000/api/get-bookings/{trip_id}/'
-            username = "hackur777"
-            password = "12345678"
-            response = requests.get(url, auth=(username, password))
+            # username = "hackur777"
+            # password = "12345678"
+            # response = requests.get(url, auth=(username, password))
+
             # print(response.status_cprint(trip_id)
             # print(response.json())
             # response = requests.get(url)
-
-            if response.status_code == 200:
+            res = interserviceCall(url, 'GET')
+            # print(res.status_code)
+            if res.status_code == 200:
+                return res
+            # if response.status_code == 200:
                 # Return the JSON data from the external API as a JsonResponse
-                return JsonResponse(response.json(), status=200, safe=False)
+            #     return JsonResponse(response.json(), status=200, safe=False)
+            # else:
+            #     # Handle 404 or other status codes from the external API
+            #     return JsonResponse({'error': 'Not found'}, status=response.status_code)
             else:
-                # Handle 404 or other status codes from the external API
-                return JsonResponse({'error': 'Not found'}, status=response.status_code)
-
-    except RequestException as e:
-        # Handle any exceptions raised during the external API call
-        return JsonResponse({'error': f'Failed to fetch data: {str(e)}'}, status=500)
+                return JsonResponse({'error':'something went wrong'}, status=res.status_code)
 
     except Exception as e:
         # General exception handling
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def create_user(request):
+    try:
+        if request.method == 'POST':
+            url = 'http://127.0.0.1:5000/api/register/'
+            data = json.loads(request.body)
+            res = interserviceCall(url, 'POST', data=data)
+            if res.status_code == 200:
+                return res
+            else:
+                return JsonResponse({'error': 'something went wrong'}, status=res.status_code)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
 
 # iterservice call which sends the booking details as well with the trip details
 
@@ -370,9 +380,9 @@ def time_cycles(request):
 
             # First Lap: Check if start_date is during night or day, and calculate first partial period
             if is_night_time(current_date):  # If it's night
-                night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0) +  timedelta(days=1)
-                # if night_end <= current_date:
-                #     night_end += timedelta(days=1)
+                night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0)
+                if night_end <= current_date:
+                    night_end += timedelta(days=1)
                 if night_end > end_date:
                     night_end = end_date
                 night_time.append({
@@ -382,8 +392,7 @@ def time_cycles(request):
                 current_date = night_end
             else:  # If it's day
                 day_end = current_date.replace(hour=21, minute=0, second=0, microsecond=0)
-                # if day_end <= current_date:
-                #     day_end += timedelta(days=1)
+
                 if day_end > end_date:
                     day_end = end_date
                 day_time.append({
@@ -404,7 +413,10 @@ def time_cycles(request):
                     })
                     current_date = day_end
                 else:  # Night period
-                    night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    night_end = current_date.replace(hour=6, minute=0, second=0, microsecond=0) 
+                    
+                    if night_end <= current_date:
+                        night_end += timedelta(days=1)
                     if night_end > end_date:
                         night_end = end_date
                     night_time.append({
@@ -454,3 +466,5 @@ def trip_exists(request, trip_id):
     else:
         # Handle unsupported request methods
         return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
